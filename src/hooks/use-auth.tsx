@@ -1,27 +1,10 @@
+
 import { useState, useEffect, createContext, useContext } from 'react';
-import { toast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
-
-type Profile = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  skills_offered: string[];
-  skills_wanted: string[];
-  points: number;
-};
-
-type AuthContextType = {
-  user: User | null;
-  profile: Profile | null;
-  loading: boolean;
-  error: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
-  logout: () => Promise<void>;
-  updateProfile: (data: Partial<Profile>) => Promise<void>;
-};
+import { supabase } from '@/integrations/supabase/client';
+import { AuthContextType, Profile } from '@/types/auth-types';
+import { fetchProfile, updateUserProfile } from './use-profile';
+import { loginUser, registerUser, logoutUser } from './use-auth-methods';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -44,7 +27,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setUser(session.user);
           
           // Fetch user profile
-          await fetchProfile(session.user.id);
+          const profileData = await fetchProfile(session.user.id);
+          if (profileData) {
+            setProfile(profileData);
+          }
         }
       } catch (err) {
         console.error('Error initializing auth:', err);
@@ -62,7 +48,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.log('Auth state changed:', event, session);
         if (session?.user) {
           setUser(session.user);
-          await fetchProfile(session.user.id);
+          const profileData = await fetchProfile(session.user.id);
+          if (profileData) {
+            setProfile(profileData);
+          }
         } else {
           setUser(null);
           setProfile(null);
@@ -77,73 +66,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, []);
 
-  const fetchProfile = async (userId: string) => {
-    try {
-      console.log('Fetching profile for user:', userId);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching profile:', error);
-        throw error;
-      }
-
-      if (data) {
-        const profileData: Profile = {
-          id: data.id,
-          firstName: data.first_name || '',
-          lastName: data.last_name || '',
-          skills_offered: data.skills_offered || [],
-          skills_wanted: data.skills_wanted || [],
-          points: data.points || 0
-        };
-        console.log('Profile data fetched:', profileData);
-        setProfile(profileData);
-      }
-    } catch (err) {
-      console.error('Error in fetchProfile:', err);
-      toast({
-        title: "Error",
-        description: "Failed to load profile data",
-        variant: "destructive"
-      });
-    }
-  };
-
   const login = async (email: string, password: string) => {
     try {
       setLoading(true);
       setError(null);
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      
-      if (error) {
-        throw error;
-      }
-      
-      if (data.user) {
-        setUser(data.user);
-        await fetchProfile(data.user.id);
-        
-        toast({
-          title: "Login successful",
-          description: "Welcome back to Skill Swap!",
-        });
+      const userData = await loginUser(email, password);
+      if (userData) {
+        setUser(userData);
+        const profileData = await fetchProfile(userData.id);
+        if (profileData) {
+          setProfile(profileData);
+        }
       }
     } catch (err: any) {
-      console.error('Login error:', err);
       setError(err.message || 'Failed to login');
-      toast({
-        title: "Login failed",
-        description: err.message || "Please check your credentials and try again.",
-        variant: "destructive"
-      });
     } finally {
       setLoading(false);
     }
@@ -153,71 +89,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       setLoading(true);
       setError(null);
-      
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            first_name: firstName,
-            last_name: lastName
-          }
+      const userData = await registerUser(email, password, firstName, lastName);
+      if (userData) {
+        setUser(userData);
+        const profileData = await fetchProfile(userData.id);
+        if (profileData) {
+          setProfile(profileData);
         }
-      });
-      
-      if (error) {
-        throw error;
-      }
-      
-      if (data.user) {
-        setUser(data.user);
-        
-        // Update profile with first and last name
-        await supabase
-          .from('profiles')
-          .update({
-            first_name: firstName,
-            last_name: lastName
-          })
-          .eq('id', data.user.id);
-        
-        await fetchProfile(data.user.id);
-        
-        toast({
-          title: "Registration successful",
-          description: "Welcome to Skill Swap!",
-        });
       }
     } catch (err: any) {
-      console.error('Registration error:', err);
       setError(err.message || 'Failed to register');
-      toast({
-        title: "Registration failed",
-        description: err.message || "Please try again with different credentials.",
-        variant: "destructive"
-      });
     } finally {
       setLoading(false);
     }
   };
 
   const logout = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-      setProfile(null);
-      toast({
-        title: "Logged out",
-        description: "You have been successfully logged out.",
-      });
-    } catch (err: any) {
-      console.error('Logout error:', err);
-      toast({
-        title: "Logout failed",
-        description: "There was an issue logging you out.",
-        variant: "destructive"
-      });
-    }
+    await logoutUser();
+    setUser(null);
+    setProfile(null);
   };
 
   const updateProfile = async (data: Partial<Profile>) => {
@@ -225,34 +115,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     try {
       setLoading(true);
-      console.log('Updating profile with data:', data);
-      
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          first_name: data.firstName,
-          last_name: data.lastName,
-          skills_offered: data.skills_offered,
-          skills_wanted: data.skills_wanted
-        })
-        .eq('id', user.id);
-      
-      if (error) throw error;
-      
-      // Refresh profile data
-      await fetchProfile(user.id);
-      
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been successfully updated.",
-      });
-    } catch (err: any) {
-      console.error('Error updating profile:', err);
-      toast({
-        title: "Update failed",
-        description: err.message || "Failed to update your profile.",
-        variant: "destructive"
-      });
+      const success = await updateUserProfile(user.id, data);
+      if (success && profile) {
+        // Update the local profile state
+        const updatedProfile = await fetchProfile(user.id);
+        if (updatedProfile) {
+          setProfile(updatedProfile);
+        }
+      }
     } finally {
       setLoading(false);
     }
