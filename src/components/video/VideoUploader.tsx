@@ -7,16 +7,43 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useVideoUpload } from '@/hooks/use-video-upload';
 import { Upload, Video, X } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
+import { useNavigate } from 'react-router-dom';
 
 type VideoUploaderProps = {
   onUploadComplete?: (videoUrl: string) => void;
 };
 
 const VideoUploader = ({ onUploadComplete }: VideoUploaderProps) => {
-  const { isUploading, progress, error, videoUrl, uploadVideo, resetUploadState } = useVideoUpload();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { 
+    isUploading, 
+    progress, 
+    error, 
+    videoUrl, 
+    uploadVideo, 
+    saveVideoDetails,
+    resetUploadState 
+  } = useVideoUpload();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  if (!user) {
+    return (
+      <div className="text-center py-12 bg-white p-6 rounded-lg shadow-md">
+        <Video className="h-12 w-12 mx-auto text-muted-foreground" />
+        <h3 className="mt-4 text-lg font-medium">Authentication Required</h3>
+        <p className="mt-2 text-muted-foreground">
+          You need to be logged in to upload videos
+        </p>
+        <Button className="mt-4" onClick={() => navigate('/login')}>
+          Sign In
+        </Button>
+      </div>
+    );
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -47,17 +74,25 @@ const VideoUploader = ({ onUploadComplete }: VideoUploaderProps) => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (videoUrl && onUploadComplete) {
-      onUploadComplete(videoUrl);
-    }
-    // In a real app, we would save title, description and video URL to Supabase here
-    resetUploadState();
-    setTitle('');
-    setDescription('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    
+    if (videoUrl) {
+      const saved = await saveVideoDetails(title, description);
+      
+      if (saved) {
+        if (onUploadComplete) {
+          onUploadComplete(videoUrl);
+        }
+        
+        // Reset form
+        resetUploadState();
+        setTitle('');
+        setDescription('');
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
     }
   };
 

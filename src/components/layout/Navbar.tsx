@@ -13,9 +13,10 @@ import {
 } from '@/components/ui/navigation-menu';
 import { cn } from '@/lib/utils';
 import { LogOut, Menu, User, X } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const Navbar = () => {
-  const { user, logout } = useAuth();
+  const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -25,6 +26,16 @@ const Navbar = () => {
   const handleLogout = async () => {
     await logout();
     navigate('/');
+  };
+
+  const getInitials = () => {
+    if (profile?.firstName && profile?.lastName) {
+      return `${profile.firstName[0]}${profile.lastName[0]}`.toUpperCase();
+    }
+    if (user?.email) {
+      return user.email[0].toUpperCase();
+    }
+    return 'U';
   };
 
   return (
@@ -50,62 +61,27 @@ const Navbar = () => {
               </NavigationMenuItem>
               
               <NavigationMenuItem>
-                <NavigationMenuTrigger>Explore</NavigationMenuTrigger>
-                <NavigationMenuContent>
-                  <ul className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2 lg:w-[600px]">
-                    <li className="row-span-3">
-                      <NavigationMenuLink asChild>
-                        <a
-                          className="flex h-full w-full select-none flex-col justify-end rounded-md bg-gradient-to-b from-muted/50 to-muted p-6 no-underline outline-none focus:shadow-md"
-                          href="#"
-                        >
-                          <div className="mb-2 mt-4 text-lg font-medium">
-                            Find Skills
-                          </div>
-                          <p className="text-sm leading-tight text-muted-foreground">
-                            Discover people offering the skills you want to learn
-                          </p>
-                        </a>
-                      </NavigationMenuLink>
-                    </li>
-                    <li>
-                      <Link to="#" onClick={closeMenu} className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
-                        <div className="text-sm font-medium leading-none">Programming</div>
-                        <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
-                          Coding, web development, and more
-                        </p>
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" onClick={closeMenu} className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
-                        <div className="text-sm font-medium leading-none">Creative Arts</div>
-                        <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
-                          Photography, design, music, and more
-                        </p>
-                      </Link>
-                    </li>
-                    <li>
-                      <Link to="#" onClick={closeMenu} className="block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground">
-                        <div className="text-sm font-medium leading-none">Lifestyle</div>
-                        <p className="line-clamp-2 text-sm leading-snug text-muted-foreground">
-                          Cooking, fitness, gardening, and more
-                        </p>
-                      </Link>
-                    </li>
-                  </ul>
-                </NavigationMenuContent>
+                <Link to="/explore">
+                  <NavigationMenuLink className={cn(
+                    "inline-flex h-10 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                  )}>
+                    Explore
+                  </NavigationMenuLink>
+                </Link>
               </NavigationMenuItem>
 
               {user && (
-                <NavigationMenuItem>
-                  <Link to="/dashboard">
-                    <NavigationMenuLink className={cn(
-                      "inline-flex h-10 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
-                    )}>
-                      Dashboard
-                    </NavigationMenuLink>
-                  </Link>
-                </NavigationMenuItem>
+                <>
+                  <NavigationMenuItem>
+                    <Link to="/dashboard">
+                      <NavigationMenuLink className={cn(
+                        "inline-flex h-10 w-max items-center justify-center rounded-md px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
+                      )}>
+                        Dashboard
+                      </NavigationMenuLink>
+                    </Link>
+                  </NavigationMenuItem>
+                </>
               )}
             </NavigationMenuList>
           </NavigationMenu>
@@ -113,9 +89,11 @@ const Navbar = () => {
           <div className="ml-4 flex items-center space-x-2">
             {user ? (
               <>
-                <Button variant="ghost" onClick={() => navigate('/profile')}>
-                  <User className="mr-2 h-4 w-4" />
-                  <span>{user.firstName}</span>
+                <Button variant="ghost" onClick={() => navigate('/profile')} className="flex items-center gap-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback>{getInitials()}</AvatarFallback>
+                  </Avatar>
+                  <span>{profile?.firstName || user.email}</span>
                 </Button>
                 <Button variant="outline" onClick={handleLogout}>
                   <LogOut className="mr-2 h-4 w-4" />
@@ -152,22 +130,29 @@ const Navbar = () => {
             <Link to="/" onClick={closeMenu} className="px-4 py-2 hover:bg-accent rounded-md">
               Home
             </Link>
-            <Link to="#" onClick={closeMenu} className="px-4 py-2 hover:bg-accent rounded-md">
-              Explore Skills
+            <Link to="/explore" onClick={closeMenu} className="px-4 py-2 hover:bg-accent rounded-md">
+              Explore
             </Link>
             
             {user && (
-              <Link to="/dashboard" onClick={closeMenu} className="px-4 py-2 hover:bg-accent rounded-md">
-                Dashboard
-              </Link>
+              <>
+                <Link to="/dashboard" onClick={closeMenu} className="px-4 py-2 hover:bg-accent rounded-md">
+                  Dashboard
+                </Link>
+                <Link to="/profile" onClick={closeMenu} className="px-4 py-2 hover:bg-accent rounded-md">
+                  My Profile
+                </Link>
+              </>
             )}
             
             <div className="pt-4 border-t">
               {user ? (
                 <>
                   <div className="flex items-center px-4 py-2">
-                    <User className="mr-2 h-4 w-4" />
-                    <span>{user.firstName} {user.lastName}</span>
+                    <Avatar className="h-8 w-8 mr-2">
+                      <AvatarFallback>{getInitials()}</AvatarFallback>
+                    </Avatar>
+                    <span>{profile?.firstName} {profile?.lastName}</span>
                   </div>
                   <Button variant="outline" onClick={handleLogout} className="w-full mt-2">
                     <LogOut className="mr-2 h-4 w-4" />

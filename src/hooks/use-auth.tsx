@@ -1,78 +1,137 @@
 
 import { useState, useEffect, createContext, useContext } from 'react';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { User } from '@supabase/supabase-js';
 
-type User = {
+type Profile = {
   id: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  skills_offered?: string[];
-  skills_wanted?: string[];
-  points?: number;
+  firstName: string;
+  lastName: string;
+  skills_offered: string[];
+  skills_wanted: string[];
+  points: number;
 };
 
 type AuthContextType = {
   user: User | null;
+  profile: Profile | null;
   loading: boolean;
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (data: Partial<Profile>) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if user is logged in from localStorage
-    const storedUser = localStorage.getItem('skillswap_user');
-    if (storedUser) {
+    // Check for existing session
+    const initAuth = async () => {
+      setLoading(true);
+      
       try {
-        setUser(JSON.parse(storedUser));
+        // Get current session
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          setUser(session.user);
+          
+          // Fetch user profile
+          await fetchProfile(session.user.id);
+        }
       } catch (err) {
-        console.error('Error parsing stored user:', err);
+        console.error('Error initializing auth:', err);
+        setError('Failed to initialize authentication');
+      } finally {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    };
+
+    initAuth();
+
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          setUser(session.user);
+          await fetchProfile(session.user.id);
+        } else {
+          setUser(null);
+          setProfile(null);
+        }
+      }
+    );
+
+    // Cleanup subscription
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // In a real app, this would interact with Supabase
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setProfile({
+          id: data.id,
+          firstName: data.first_name || '',
+          lastName: data.last_name || '',
+          skills_offered: data.skills_offered || [],
+          skills_wanted: data.skills_wanted || [],
+          points: data.points || 0
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching user profile:', err);
+    }
+  };
+
   const login = async (email: string, password: string) => {
     try {
       setLoading(true);
       setError(null);
       
-      // Mock login process - in production, this would call Supabase auth
-      // const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      // For demo purposes, creating a mock user
-      const mockUser: User = {
-        id: 'user-' + Math.random().toString(36).substr(2, 9),
-        email: email,
-        firstName: 'Demo',
-        lastName: 'User',
-        skills_offered: ['Programming', 'Design'],
-        skills_wanted: ['Cooking', 'Photography'],
-        points: 100
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('skillswap_user', JSON.stringify(mockUser));
-      toast({
-        title: "Login successful",
-        description: "Welcome back to Skill Swap!",
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
       });
-    } catch (err) {
+      
+      if (error) {
+        throw error;
+      }
+      
+      if (data.user) {
+        setUser(data.user);
+        await fetchProfile(data.user.id);
+        
+        toast({
+          title: "Login successful",
+          description: "Welcome back to Skill Swap!",
+        });
+      }
+    } catch (err: any) {
       console.error('Login error:', err);
-      setError('Failed to login. Please check your credentials.');
+      setError(err.message || 'Failed to login');
       toast({
         title: "Login failed",
-        description: "Please check your credentials and try again.",
+        description: err.message || "Please check your credentials and try again.",
         variant: "destructive"
       });
     } finally {
@@ -85,32 +144,46 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(true);
       setError(null);
       
-      // Mock registration process - in production, this would call Supabase auth
-      // const { data, error } = await supabase.auth.signUp({ email, password });
-      
-      // For demo purposes, creating a mock user
-      const mockUser: User = {
-        id: 'user-' + Math.random().toString(36).substr(2, 9),
-        email: email,
-        firstName: firstName,
-        lastName: lastName,
-        skills_offered: [],
-        skills_wanted: [],
-        points: 0
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('skillswap_user', JSON.stringify(mockUser));
-      toast({
-        title: "Registration successful",
-        description: "Welcome to Skill Swap!",
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName
+          }
+        }
       });
-    } catch (err) {
+      
+      if (error) {
+        throw error;
+      }
+      
+      if (data.user) {
+        setUser(data.user);
+        
+        // Update profile with first and last name
+        await supabase
+          .from('profiles')
+          .update({
+            first_name: firstName,
+            last_name: lastName
+          })
+          .eq('id', data.user.id);
+        
+        await fetchProfile(data.user.id);
+        
+        toast({
+          title: "Registration successful",
+          description: "Welcome to Skill Swap!",
+        });
+      }
+    } catch (err: any) {
       console.error('Registration error:', err);
-      setError('Failed to register. Please try again.');
+      setError(err.message || 'Failed to register');
       toast({
         title: "Registration failed",
-        description: "Please try again with different credentials.",
+        description: err.message || "Please try again with different credentials.",
         variant: "destructive"
       });
     } finally {
@@ -120,15 +193,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = async () => {
     try {
-      // Mock logout process
-      // await supabase.auth.signOut();
+      await supabase.auth.signOut();
       setUser(null);
-      localStorage.removeItem('skillswap_user');
+      setProfile(null);
       toast({
         title: "Logged out",
         description: "You have been successfully logged out.",
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Logout error:', err);
       toast({
         title: "Logout failed",
@@ -138,8 +210,54 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const updateProfile = async (data: Partial<Profile>) => {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          first_name: data.firstName,
+          last_name: data.lastName,
+          skills_offered: data.skills_offered,
+          skills_wanted: data.skills_wanted
+        })
+        .eq('id', user.id);
+      
+      if (error) throw error;
+      
+      // Refresh profile data
+      await fetchProfile(user.id);
+      
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been successfully updated.",
+      });
+    } catch (err: any) {
+      console.error('Error updating profile:', err);
+      toast({
+        title: "Update failed",
+        description: err.message || "Failed to update your profile.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, register, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      profile, 
+      loading, 
+      error, 
+      login, 
+      register, 
+      logout,
+      updateProfile
+    }}>
       {children}
     </AuthContext.Provider>
   );

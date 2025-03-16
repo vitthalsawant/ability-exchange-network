@@ -1,24 +1,29 @@
 
 import { useState } from 'react';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/use-auth';
 
 type UploadState = {
   progress: number;
   isUploading: boolean;
   error: string | null;
   videoUrl: string | null;
+  thumbnailUrl: string | null;
 };
 
 export const useVideoUpload = () => {
+  const { user } = useAuth();
   const [uploadState, setUploadState] = useState<UploadState>({
     progress: 0,
     isUploading: false,
     error: null,
-    videoUrl: null
+    videoUrl: null,
+    thumbnailUrl: null
   });
 
   const uploadVideo = async (file: File) => {
-    if (!file) return;
+    if (!file || !user) return;
     
     // Validate file is video
     if (!file.type.startsWith('video/')) {
@@ -36,44 +41,20 @@ export const useVideoUpload = () => {
         progress: 0,
         isUploading: true,
         error: null,
-        videoUrl: null
+        videoUrl: null,
+        thumbnailUrl: null
       });
 
-      // Mock upload progress updates
-      const mockUpload = () => {
-        let progress = 0;
-        const interval = setInterval(() => {
-          progress += 10;
-          setUploadState(prev => ({ ...prev, progress }));
-          
-          if (progress >= 100) {
-            clearInterval(interval);
-            
-            // Mock successful upload
-            const mockVideoUrl = URL.createObjectURL(file);
-            setUploadState({
-              progress: 100,
-              isUploading: false,
-              error: null,
-              videoUrl: mockVideoUrl
-            });
-            
-            toast({
-              title: "Upload Complete",
-              description: "Your video has been uploaded successfully!",
-            });
-          }
-        }, 500);
-      };
-
-      mockUpload();
-
-      // In a real app with Supabase, it would look something like:
-      /*
-      const fileName = `${Date.now()}-${file.name}`;
+      // Create a unique file name
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+      
+      // Upload to Supabase storage
       const { data, error } = await supabase.storage
-        .from('videos')
+        .from('skill_videos')
         .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
           onUploadProgress: (progress) => {
             const percentage = Math.round((progress.loaded / progress.total) * 100);
             setUploadState(prev => ({ ...prev, progress: percentage }));
@@ -82,32 +63,69 @@ export const useVideoUpload = () => {
 
       if (error) throw error;
       
-      const { data: urlData } = supabase.storage
-        .from('videos')
-        .getPublicUrl(data.path);
+      // Get the public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('skill_videos')
+        .getPublicUrl(fileName);
+      
+      if (publicUrlData) {
+        setUploadState({
+          progress: 100,
+          isUploading: false,
+          error: null,
+          videoUrl: publicUrlData.publicUrl,
+          thumbnailUrl: null // In a production app, you'd generate a thumbnail
+        });
         
-      setUploadState({
-        progress: 100,
-        isUploading: false,
-        error: null,
-        videoUrl: urlData.publicUrl
-      });
-      */
-
-    } catch (error) {
+        toast({
+          title: "Upload Complete",
+          description: "Your video has been uploaded successfully!",
+        });
+      }
+    } catch (error: any) {
       console.error('Upload error:', error);
       setUploadState(prev => ({
         ...prev,
         isUploading: false,
-        error: 'Failed to upload video',
+        error: error.message || 'Failed to upload video',
         progress: 0
       }));
       
       toast({
         title: "Upload Failed",
-        description: "There was an error uploading your video. Please try again.",
+        description: error.message || "There was an error uploading your video. Please try again.",
         variant: "destructive"
       });
+    }
+  };
+
+  const saveVideoDetails = async (title: string, description: string) => {
+    if (!user || !uploadState.videoUrl) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('skill_videos')
+        .insert([
+          {
+            user_id: user.id,
+            title,
+            description,
+            video_url: uploadState.videoUrl,
+            thumbnail_url: uploadState.thumbnailUrl
+          }
+        ]);
+      
+      if (error) throw error;
+      
+      return true;
+    } catch (error: any) {
+      console.error('Error saving video details:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save video details.",
+        variant: "destructive"
+      });
+      return false;
     }
   };
 
@@ -116,13 +134,15 @@ export const useVideoUpload = () => {
       progress: 0,
       isUploading: false,
       error: null,
-      videoUrl: null
+      videoUrl: null,
+      thumbnailUrl: null
     });
   };
 
   return {
     ...uploadState,
     uploadVideo,
+    saveVideoDetails,
     resetUploadState
   };
 };

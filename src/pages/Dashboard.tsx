@@ -1,15 +1,17 @@
 
 import { useAuth } from '@/hooks/use-auth';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import VideoUploader from '@/components/video/VideoUploader';
 import { useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, ArrowRight, UserPlus, Video } from 'lucide-react';
+import VideoGallery from '@/components/video/VideoGallery';
 
 const Dashboard = () => {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
+  const navigate = useNavigate();
   const [showVideoUploader, setShowVideoUploader] = useState(false);
 
   if (loading) {
@@ -20,10 +22,13 @@ const Dashboard = () => {
     return <Navigate to="/login" />;
   }
 
+  const isProfileComplete = profile && profile.firstName && profile.lastName &&
+    (profile.skills_offered?.length > 0 || profile.skills_wanted?.length > 0);
+
   return (
     <div className="container mx-auto px-4 py-8">
       <header className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Welcome, {user.firstName}!</h1>
+        <h1 className="text-3xl font-bold mb-2">Welcome, {profile?.firstName || user.email}!</h1>
         <p className="text-muted-foreground">Manage your skills and connections from your dashboard</p>
       </header>
 
@@ -41,11 +46,11 @@ const Dashboard = () => {
               <h2 className="text-xl font-bold mb-4">Quick Stats</h2>
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-primary/10 p-4 rounded-md">
-                  <div className="text-2xl font-bold">{user.skills_offered?.length || 0}</div>
+                  <div className="text-2xl font-bold">{profile?.skills_offered?.length || 0}</div>
                   <div className="text-sm text-muted-foreground">Skills Offered</div>
                 </div>
                 <div className="bg-primary/10 p-4 rounded-md">
-                  <div className="text-2xl font-bold">{user.skills_wanted?.length || 0}</div>
+                  <div className="text-2xl font-bold">{profile?.skills_wanted?.length || 0}</div>
                   <div className="text-sm text-muted-foreground">Skills Wanted</div>
                 </div>
                 <div className="bg-primary/10 p-4 rounded-md">
@@ -53,7 +58,7 @@ const Dashboard = () => {
                   <div className="text-sm text-muted-foreground">Connections</div>
                 </div>
                 <div className="bg-primary/10 p-4 rounded-md">
-                  <div className="text-2xl font-bold">{user.points || 0}</div>
+                  <div className="text-2xl font-bold">{profile?.points || 0}</div>
                   <div className="text-sm text-muted-foreground">Skill Points</div>
                 </div>
               </div>
@@ -62,7 +67,7 @@ const Dashboard = () => {
             <div className="bg-white p-6 rounded-lg shadow-md">
               <h2 className="text-xl font-bold mb-4">Get Started</h2>
               <div className="space-y-4">
-                <Button variant="outline" className="w-full justify-between">
+                <Button variant="outline" className="w-full justify-between" onClick={() => navigate('/profile')}>
                   <div className="flex items-center">
                     <UserPlus className="h-4 w-4 mr-2" />
                     Complete Your Profile
@@ -76,17 +81,26 @@ const Dashboard = () => {
                   </div>
                   <ArrowRight className="h-4 w-4" />
                 </Button>
+                <Button variant="outline" className="w-full justify-between" onClick={() => navigate('/explore')}>
+                  <div className="flex items-center">
+                    <Video className="h-4 w-4 mr-2" />
+                    Explore Skills
+                  </div>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </div>
           
-          <Alert className="mt-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Your profile is incomplete</AlertTitle>
-            <AlertDescription>
-              Complete your profile to increase your chances of finding skill swap partners.
-            </AlertDescription>
-          </Alert>
+          {!isProfileComplete && (
+            <Alert className="mt-6">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Your profile is incomplete</AlertTitle>
+              <AlertDescription>
+                Complete your profile to increase your chances of finding skill swap partners.
+              </AlertDescription>
+            </Alert>
+          )}
         </TabsContent>
         
         <TabsContent value="skills">
@@ -95,30 +109,30 @@ const Dashboard = () => {
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <h3 className="text-lg font-semibold mb-3">Skills I Offer</h3>
-                {user.skills_offered && user.skills_offered.length > 0 ? (
+                {profile?.skills_offered && profile.skills_offered.length > 0 ? (
                   <ul className="space-y-2">
-                    {user.skills_offered.map((skill, index) => (
+                    {profile.skills_offered.map((skill, index) => (
                       <li key={index} className="p-3 bg-muted rounded-md">{skill}</li>
                     ))}
                   </ul>
                 ) : (
                   <p className="text-muted-foreground">No skills added yet</p>
                 )}
-                <Button className="mt-4">Add Skills</Button>
+                <Button className="mt-4" onClick={() => navigate('/profile')}>Manage Skills</Button>
               </div>
               
               <div>
                 <h3 className="text-lg font-semibold mb-3">Skills I Want to Learn</h3>
-                {user.skills_wanted && user.skills_wanted.length > 0 ? (
+                {profile?.skills_wanted && profile.skills_wanted.length > 0 ? (
                   <ul className="space-y-2">
-                    {user.skills_wanted.map((skill, index) => (
+                    {profile.skills_wanted.map((skill, index) => (
                       <li key={index} className="p-3 bg-muted rounded-md">{skill}</li>
                     ))}
                   </ul>
                 ) : (
                   <p className="text-muted-foreground">No skills added yet</p>
                 )}
-                <Button className="mt-4">Add Skills</Button>
+                <Button className="mt-4" onClick={() => navigate('/profile')}>Manage Skills</Button>
               </div>
             </div>
           </div>
@@ -136,16 +150,7 @@ const Dashboard = () => {
                 onUploadComplete={() => setShowVideoUploader(false)}
               />
             ) : (
-              <div className="text-center py-12">
-                <Video className="h-12 w-12 mx-auto text-muted-foreground" />
-                <h3 className="mt-4 text-lg font-medium">No Videos Yet</h3>
-                <p className="mt-2 text-muted-foreground">
-                  Share your skills by uploading tutorial videos
-                </p>
-                <Button className="mt-4" onClick={() => setShowVideoUploader(true)}>
-                  Upload Your First Video
-                </Button>
-              </div>
+              <VideoGallery userId={user.id} />
             )}
           </div>
         </TabsContent>
@@ -159,7 +164,7 @@ const Dashboard = () => {
               <p className="mt-2 text-muted-foreground">
                 Connect with others to start swapping skills
               </p>
-              <Button className="mt-4">Find People</Button>
+              <Button className="mt-4" onClick={() => navigate('/explore')}>Find People</Button>
             </div>
           </div>
         </TabsContent>
