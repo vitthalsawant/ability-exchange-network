@@ -9,11 +9,24 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader2 } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+
+// Enhanced email validation pattern
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
 
 const formSchema = z.object({
   firstName: z.string().min(2, 'First name must be at least 2 characters'),
   lastName: z.string().min(2, 'Last name must be at least 2 characters'),
-  email: z.string().email('Invalid email address'),
+  email: z.string()
+    .email('Invalid email address')
+    .regex(EMAIL_REGEX, 'Please enter a valid email address')
+    .refine(email => {
+      // Check for common disposable email domains
+      const disposableDomains = ['temp-mail.org', 'tempmail.com', 'fakeinbox.com', 
+                               'mailinator.com', 'yopmail.com', 'guerrillamail.com'];
+      const domain = email.split('@')[1];
+      return !disposableDomains.some(d => domain.includes(d));
+    }, 'Please use a valid non-disposable email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string().min(6, 'Password must be at least 6 characters')
 }).refine(data => data.password === data.confirmPassword, {
@@ -43,7 +56,17 @@ const RegisterForm = () => {
     setIsSubmitting(true);
     try {
       await register(values.email, values.password, values.firstName, values.lastName);
-      navigate('/dashboard');
+      toast({
+        title: "Account created",
+        description: "Please check your email to confirm your account",
+      });
+      navigate('/login');
+    } catch (error: any) {
+      toast({
+        title: "Registration failed",
+        description: error.message || "Failed to create account",
+        variant: "destructive"
+      });
     } finally {
       setIsSubmitting(false);
     }

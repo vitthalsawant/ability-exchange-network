@@ -1,4 +1,3 @@
-
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -12,6 +11,23 @@ export const loginUser = async (email: string, password: string): Promise<User |
     });
     
     if (error) {
+      console.error('Login error:', error);
+      
+      // Check specifically for email confirmation error
+      if (error.message.includes('Email not confirmed')) {
+        toast({
+          title: "Email not confirmed",
+          description: "Please check your inbox and confirm your email before logging in.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Login failed",
+          description: error.message || "Please check your credentials and try again.",
+          variant: "destructive"
+        });
+      }
+      
       throw error;
     }
     
@@ -25,11 +41,6 @@ export const loginUser = async (email: string, password: string): Promise<User |
     return null;
   } catch (err: any) {
     console.error('Login error:', err);
-    toast({
-      title: "Login failed",
-      description: err.message || "Please check your credentials and try again.",
-      variant: "destructive"
-    });
     throw err;
   }
 };
