@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -60,6 +59,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', event, session);
         if (session?.user) {
           setUser(session.user);
           await fetchProfile(session.user.id);
@@ -67,6 +67,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setUser(null);
           setProfile(null);
         }
+        setLoading(false);
       }
     );
 
@@ -78,6 +79,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchProfile = async (userId: string) => {
     try {
+      console.log('Fetching profile for user:', userId);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -85,21 +87,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .single();
 
       if (error) {
+        console.error('Error fetching profile:', error);
         throw error;
       }
 
       if (data) {
-        setProfile({
+        const profileData: Profile = {
           id: data.id,
           firstName: data.first_name || '',
           lastName: data.last_name || '',
           skills_offered: data.skills_offered || [],
           skills_wanted: data.skills_wanted || [],
           points: data.points || 0
-        });
+        };
+        console.log('Profile data fetched:', profileData);
+        setProfile(profileData);
       }
     } catch (err) {
-      console.error('Error fetching user profile:', err);
+      console.error('Error in fetchProfile:', err);
+      toast({
+        title: "Error",
+        description: "Failed to load profile data",
+        variant: "destructive"
+      });
     }
   };
 
@@ -215,6 +225,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     
     try {
       setLoading(true);
+      console.log('Updating profile with data:', data);
       
       const { error } = await supabase
         .from('profiles')
