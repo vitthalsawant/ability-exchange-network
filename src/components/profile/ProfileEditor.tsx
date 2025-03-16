@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -30,14 +31,13 @@ const ProfileEditor = () => {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      firstName: '',
-      lastName: ''
+      firstName: profile?.firstName || '',
+      lastName: profile?.lastName || ''
     }
   });
 
   useEffect(() => {
     if (profile) {
-      console.log('Setting form values from profile:', profile);
       form.reset({
         firstName: profile.firstName || '',
         lastName: profile.lastName || ''
