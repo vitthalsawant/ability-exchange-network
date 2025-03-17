@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/hooks/use-auth';
 import { Loader2 } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 const formSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -21,6 +22,7 @@ const LoginForm = () => {
   const { login, loading } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -32,9 +34,29 @@ const LoginForm = () => {
 
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
+    setEmailError(null);
+    
     try {
       await login(values.email, values.password);
       navigate('/dashboard');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      // Check for email confirmation error
+      if (error.message?.includes('Email not confirmed')) {
+        setEmailError('Please confirm your email address before logging in.');
+        toast({
+          title: "Email not confirmed",
+          description: "Please check your inbox and confirm your email before logging in",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Login failed",
+          description: error.message || "Invalid email or password",
+          variant: "destructive"
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -59,6 +81,7 @@ const LoginForm = () => {
                   <Input placeholder="you@example.com" {...field} />
                 </FormControl>
                 <FormMessage />
+                {emailError && <p className="text-sm font-medium text-destructive mt-1">{emailError}</p>}
               </FormItem>
             )}
           />

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,20 +47,20 @@ export const useVideoUpload = () => {
       // Create a unique file name
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+
+      console.log('Starting video upload:', fileName);
       
       // Upload to Supabase storage
       const { data, error } = await supabase.storage
         .from('skill_videos')
         .upload(fileName, file, {
           cacheControl: '3600',
-          upsert: false,
-          onUploadProgress: (progress) => {
-            const percentage = Math.round((progress.loaded / progress.total) * 100);
-            setUploadState(prev => ({ ...prev, progress: percentage }));
-          }
+          upsert: false
         });
 
       if (error) throw error;
+      
+      console.log('Video upload completed:', data);
       
       // Get the public URL
       const { data: publicUrlData } = supabase.storage
@@ -81,6 +80,8 @@ export const useVideoUpload = () => {
           title: "Upload Complete",
           description: "Your video has been uploaded successfully!",
         });
+
+        console.log('Video URL generated:', publicUrlData.publicUrl);
       }
     } catch (error: any) {
       console.error('Upload error:', error);
