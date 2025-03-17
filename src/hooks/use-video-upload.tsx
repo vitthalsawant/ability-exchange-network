@@ -49,28 +49,19 @@ export const useVideoUpload = () => {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
       
-      // Track upload progress manually
-      const uploadWithProgress = async () => {
-        // Upload to Supabase storage without the onUploadProgress option
-        const { data, error } = await supabase.storage
-          .from('skill_videos')
-          .upload(fileName, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-          
-        if (error) throw error;
-        return data;
-      };
-      
-      // Set initial progress
-      setUploadState(prev => ({ ...prev, progress: 10 }));
-      
-      // Perform the upload
-      const data = await uploadWithProgress();
-      
-      // Set progress to 100% when complete
-      setUploadState(prev => ({ ...prev, progress: 100 }));
+      // Upload to Supabase storage
+      const { data, error } = await supabase.storage
+        .from('skill_videos')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+          onUploadProgress: (progress) => {
+            const percentage = Math.round((progress.loaded / progress.total) * 100);
+            setUploadState(prev => ({ ...prev, progress: percentage }));
+          }
+        });
+
+      if (error) throw error;
       
       // Get the public URL
       const { data: publicUrlData } = supabase.storage
